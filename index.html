@@ -168,6 +168,14 @@
     border:3px solid var(--gold);border-radius:20px;padding:12px 22px;font-size:1.3rem;font-weight:800;z-index:15;
     opacity:0;pointer-events:none;transition:opacity .25s;text-align:center;max-width:92vw}
   .toast.on{opacity:1}
+  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .cal div{aspect-ratio:1;border-radius:10px;background:var(--card2);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;font-weight:700;font-size:.95rem;position:relative}
+  .cal .wd{aspect-ratio:auto;background:none;color:var(--mute);font-size:.8rem}
+  .cal .blank{background:none}
+  .cal .used{background:var(--green);color:var(--btnink)}
+  .cal .today{outline:3px solid var(--gold)}
+  .cal .used small{font-size:.7rem;line-height:1}
 </style>
 </head>
 <body>
@@ -239,6 +247,13 @@
   <button class="btn" id="themeX" style="margin-top:14px;width:100%">Done</button></div></div>
 <div class="modal" id="dlg"><div class="sheet"><h3 id="dlgMsg"></h3>
   <div class="row"><button class="btn ghost grow" id="dlgNo">No</button><button class="btn grow" id="dlgYes">Yes</button></div></div></div>
+<div class="modal" id="histM"><div class="sheet"><h3 id="hTitle"></h3>
+  <div class="row" style="margin-bottom:10px"><button class="btn ghost" id="hPrev">◀</button>
+    <div class="grow" id="hMonth" style="text-align:center;font-weight:800;font-size:1.3rem"></div>
+    <button class="btn ghost" id="hNext">▶</button></div>
+  <div class="cal" id="hCal"></div>
+  <div id="hSum" style="margin-top:14px;line-height:1.5"></div>
+  <button class="btn" id="hX" style="margin-top:14px;width:100%">Done</button></div></div>
 <div class="toast" id="toast"></div>
 <div id="win">
   <div class="trophy">🏆</div>
@@ -277,8 +292,8 @@ let editing = null;      // working copy of routine
 let wakeLock = null;
 
 function load(){
-  try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.routines) return s; }catch(e){}
-  return {routines: JSON.parse(JSON.stringify(DEFAULTS)), run:null};
+  try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.routines){ s.history = s.history || []; return s; } }catch(e){}
+  return {routines: JSON.parse(JSON.stringify(DEFAULTS)), run:null, history:[]};
 }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
 window.addEventListener('pagehide', save);
@@ -308,19 +323,25 @@ function fmtDelta(sec){ // human text for ahead/behind amount
 const totalMin = r => r.tasks.reduce((a,t)=>a+t.min,0);
 
 /* ---------- home ---------- */
+function monthRuns(rid, y, m){
+  return state.history.filter(h=>{ const d = new Date(h.fin); return h.rid===rid && d.getFullYear()===y && d.getMonth()===m; });
+}
 function renderHome(){
+  const now = new Date();
   const box = $('rlist'); box.innerHTML='';
   state.routines.forEach(r=>{
     const d = document.createElement('div'); d.className='rtn';
     d.innerHTML = `<div class="ic">${r.icon}</div>
       <div class="grow"><div class="nm"></div>
-      <div class="sub">${r.tasks.length} tasks · ${totalMin(r)} min${r.deadline?' · by '+fmtHM(r.deadline):''}</div></div>`;
+      <div class="sub">${r.tasks.length} tasks · ${totalMin(r)} min${r.deadline?' · by '+fmtHM(r.deadline):''}</div>
+      <div class="sub" style="color:var(--gold);font-weight:700">✅ Used ${monthRuns(r.id, now.getFullYear(), now.getMonth()).length}× this month</div></div>`;
     d.querySelector('.nm').textContent = r.name;
     const go = document.createElement('button'); go.className='btn'; go.textContent='▶ Open';
     go.onclick = ()=>openRun(r.id);
     const ed = document.createElement('button'); ed.className='btn ghost'; ed.textContent='✏️';
     ed.onclick = ()=>openEdit(r.id);
-    const acts = document.createElement('div'); acts.className='acts'; acts.append(ed, go); d.append(acts); box.append(d);
+    const acts = document.createElement('div'); acts.className='acts'; const cal = document.createElement('button'); cal.className='btn ghost'; cal.textContent='📅'; cal.onclick = ()=>openHist(r.id);
+    acts.append(ed, cal, go); d.append(acts); box.append(d);
   });
 }
 $('newR').onclick = ()=>{
@@ -414,6 +435,7 @@ function enableDrag(d, handle){
 $('eDel').onclick = ()=>{
   ask('Delete this routine?', ()=>{
     state.routines = state.routines.filter(r=>r.id!==editing.id);
+    state.history = state.history.filter(h=>h.rid!==editing.id);
     if(state.run && state.run.rid===editing.id) state.run = null;
     save(); renderHome(); show('home');
   });
@@ -500,7 +522,10 @@ function taskToast(i){ // comment on how quick this one task was
 function toggle(i){
   const run = state.run; if(!run) return;
   const completing = !run.done[i];
-  if(!completing) delete run.done[i]; else run.done[i] = Date.now();
+  if(!completing){
+    delete run.done[i];
+    if(run.logged){ state.history = state.history.filter(h=>h.id!==run.logged); run.logged = null; }
+  } else run.done[i] = Date.now();
   tick(); save();
   if(completing) taskToast(i);
   const r = rById(curId);
@@ -600,12 +625,19 @@ function tick(){
 }
 
 /* ---------- celebration ---------- */
+function logRun(r, run, fin, slack){
+  const id = r.id+'@'+run.start;
+  state.history = state.history.filter(h=>h.id!==id);
+  state.history.push({id, rid:r.id, start:run.start, fin, planned:totalMin(r)*60, slack:Math.round(slack)});
+  run.logged = id; save();
+}
 function celebrate(){
   const r = rById(curId), run = state.run;
   const P = totalMin(r)*60, fin = Math.max(...Object.values(run.done));
   const slack = P - (fin-run.start)/1000, dl = deadlineDate(r);
   const worst = Math.min(0, run.worst||0), bad = worst < -Math.max(180, P*.15);
   const margin = dl ? (dl-fin)/1000 : null, ratio = slack/P;
+  logRun(r, run, fin, slack);
   let title, note;
   if(dl && margin < 0){ title = 'So close! 💪'; note = `You missed the deadline by ${fmtDelta(margin)}. You'll get it next time!`; }
   else if((dl && margin <= 120 && slack < 60) || (!dl && bad && slack > -60 && slack < 60)){
@@ -843,6 +875,39 @@ $('bgReset').onclick = ()=>{
   try{ localStorage.setItem('ontrack.bg', JSON.stringify(bgPrefs)); }catch(e){}
   applyBg(); renderBgs();
 };
+
+/* ---------- usage history ---------- */
+let histRid = null, histY = 0, histM = 0;
+function openHist(rid){
+  histRid = rid; const n = new Date(); histY = n.getFullYear(); histM = n.getMonth();
+  renderHist(); $('histM').classList.add('on');
+}
+function renderHist(){
+  const r = rById(histRid); if(!r) return;
+  $('hTitle').textContent = r.icon+' '+r.name;
+  const first = new Date(histY, histM, 1);
+  $('hMonth').textContent = first.toLocaleDateString('en-AU', {month:'long', year:'numeric'});
+  const runs = monthRuns(histRid, histY, histM), byDay = {};
+  runs.forEach(h=>{ const d = new Date(h.fin).getDate(); byDay[d] = (byDay[d]||0)+1; });
+  const c = $('hCal'); c.innerHTML = '';
+  ['M','T','W','T','F','S','S'].forEach(w=>{ const d = document.createElement('div'); d.className='wd'; d.textContent=w; c.append(d); });
+  const lead = (first.getDay()+6)%7, days = new Date(histY, histM+1, 0).getDate(), now = new Date();
+  for(let i=0;i<lead;i++){ const d = document.createElement('div'); d.className='blank'; c.append(d); }
+  for(let d=1; d<=days; d++){
+    const x = document.createElement('div'), n = byDay[d]||0;
+    x.className = (n?'used':'') + (histY===now.getFullYear() && histM===now.getMonth() && d===now.getDate() ? ' today':'');
+    x.innerHTML = d + (n>1 ? `<small>×${n}</small>` : '');
+    c.append(x);
+  }
+  const good = runs.filter(h=>h.slack >= -15).length;
+  const all = state.history.filter(h=>h.rid===histRid).length;
+  $('hSum').innerHTML = runs.length
+    ? `<b>Used ${runs.length} time${runs.length===1?'':'s'}</b> this month<br>On time or ahead: ${good} · Behind: ${runs.length-good}<br><span style="color:var(--mute)">All time: ${all}</span>`
+    : `<b>Not used this month yet.</b><br><span style="color:var(--mute)">All time: ${all}</span>`;
+}
+$('hPrev').onclick = ()=>{ histM--; if(histM<0){ histM=11; histY--; } renderHist(); };
+$('hNext').onclick = ()=>{ histM++; if(histM>11){ histM=0; histY++; } renderHist(); };
+$('hX').onclick = ()=>$('histM').classList.remove('on');
 
 /* ---------- boot ---------- */
 applyTheme(theme);
