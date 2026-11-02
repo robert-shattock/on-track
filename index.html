@@ -42,7 +42,8 @@
     --ahead:#3a8a2a; --behind:#c26a1a; --late:#b03a2a;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
-  html,body{margin:0;min-height:100%;background:var(--bg);background-image:var(--bgimg);background-attachment:fixed;color:var(--ink);
+  html{background-color:var(--bg)}
+  html,body{margin:0;min-height:100%;color:var(--ink);
     font-family:system-ui,"Segoe UI",Roboto,sans-serif;font-size:20px}
   button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulation}
   input{font:inherit;user-select:text}
@@ -108,6 +109,13 @@
   @keyframes fall{to{transform:translateY(115vh) rotate(540deg)}}
   .hd{display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab;font-size:1.7rem;width:64px}
   .erow.drag{position:relative;z-index:5;box-shadow:0 10px 30px rgba(0,0,0,.6);background:var(--card2)}
+  body::before{content:"";position:fixed;inset:0;z-index:-1;background-image:var(--bgcustom,var(--bgimg));
+    background-size:cover;background-position:center bottom;background-repeat:no-repeat}
+  .bt{height:84px;border-radius:16px;border:4px solid transparent;color:#fff;font-weight:700;
+    text-shadow:0 1px 4px #000,0 0 8px #000;background-size:cover;background-position:center bottom;padding:4px}
+  .bt.sel{border-color:#fff}
+  .rtn .grow{min-width:0}
+  .rtn .acts{display:flex;gap:10px}
   .icobtn{width:70px;flex:none;cursor:pointer;font-size:1.8rem;padding:6px}
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
   .modal.on{display:flex}
@@ -121,13 +129,43 @@
   .tt.sel{border-color:#fff}
   .tt .e{font-size:2.2rem;display:block}
   .top1{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px}
+  @media (max-width:560px){
+    html,body{font-size:17px}
+    .screen{padding:12px}
+    h1{font-size:1.6rem}
+    .btn{padding:10px 14px;min-height:50px;border-radius:14px}
+    .btn.go{min-height:72px;font-size:1.4rem}
+    .rtn{flex-wrap:wrap;padding:14px;gap:10px}
+    .rtn .ic{font-size:2.2rem}
+    .rtn .nm{font-size:1.25rem;overflow-wrap:anywhere}
+    .rtn .grow{flex:1 1 0}
+    .rtn .acts{width:100%}
+    .rtn .acts .btn{flex:1}
+    .rtn .acts .btn.ghost{flex:0 0 64px}
+    .status .big{font-size:2.1rem}
+    .stats{gap:6px}
+    .stat b{font-size:1.1rem}
+    .task{gap:10px;padding:10px 12px;min-height:72px}
+    .task .ic{font-size:2rem;width:42px}
+    .task .nm{font-size:1.2rem;overflow-wrap:anywhere}
+    .task .grow{min-width:0}
+    .task .chk{width:42px;height:42px}
+    .top .btn{padding:8px 10px;min-height:46px}
+    #clock{font-size:1.5rem!important}
+    .sq{width:46px;height:46px}
+    .hd{width:56px}
+    .icobtn{width:60px}
+    .erow .row{gap:8px}
+    .grid button{width:56px;height:56px}
+    .top1{flex-wrap:wrap}
+  }
 </style>
 </head>
 <body>
 
 <!-- HOME -->
 <div id="home" class="screen on">
-  <div class="top1"><h1 style="margin:0" id="homeTitle">⏱️ On Track</h1><button class="btn ghost" id="themeBtn">🎨 Theme</button></div>
+  <div class="top1"><h1 style="margin:0" id="homeTitle">⏱️ On Track</h1><button class="btn ghost" id="themeBtn">🎨 Look</button></div>
   <div id="rlist"></div>
   <button class="btn ghost" id="newR">➕ New routine</button>
 </div>
@@ -183,6 +221,9 @@
 <div class="modal" id="pick"><div class="sheet"><h3>Pick an icon</h3><div id="pickBody"></div>
   <button class="btn ghost" id="pickX" style="margin-top:14px;width:100%">Cancel</button></div></div>
 <div class="modal" id="themeM"><div class="sheet"><h3>Pick a theme</h3><div class="tgrid" id="themeBody"></div>
+  <h3 style="margin-top:18px">Pick a background</h3><div class="tgrid" id="bgBody"></div>
+  <button class="btn ghost" id="bgReset" style="margin-top:10px;width:100%">↺ Use this theme's usual background</button>
+  <input type="file" id="photoIn" accept="image/*" hidden>
   <button class="btn" id="themeX" style="margin-top:14px;width:100%">Done</button></div></div>
 <div class="modal" id="dlg"><div class="sheet"><h3 id="dlgMsg"></h3>
   <div class="row"><button class="btn ghost grow" id="dlgNo">No</button><button class="btn grow" id="dlgYes">Yes</button></div></div></div>
@@ -263,7 +304,7 @@ function renderHome(){
     go.onclick = ()=>openRun(r.id);
     const ed = document.createElement('button'); ed.className='btn ghost'; ed.textContent='✏️';
     ed.onclick = ()=>openEdit(r.id);
-    d.append(ed, go); box.append(d);
+    const acts = document.createElement('div'); acts.className='acts'; acts.append(ed, go); d.append(acts); box.append(d);
   });
 }
 $('newR').onclick = ()=>{
@@ -555,6 +596,7 @@ function ask(msg, yes){
 }
 const ICONS = {
   'Morning':['🪥','🧼','🛁','🚿','🧴','🪮','👕','👖','🩳','🧦','👟','🥾','🧥','🧢','👗'],
+  'Exercise & eyes':['👁️','👀','🤸','🏋️','🧘','🏃','🚴','🤾','⛹️','🥋','💪','🦵','🙆','🏊','🤺','🧗','🛹','🦶','👂','🧠'],
   'Food':['🥣','🍞','🥞','🥚','🍌','🍎','🥛','🍽️','🥪','🍕','🥕','🍪','💧'],
   'School':['🎒','📚','✏️','📝','🧮','🏫','📏','🎨','🔬','💻','📖','🍱'],
   'Home':['🛏️','🧹','🧺','🗑️','🐶','🐱','🪴','🔑','🚪','📱','🧸','🔌'],
@@ -593,6 +635,7 @@ function applyTheme(id){
   $('homeTitle').textContent = t.e+' On Track';
   document.querySelector('#win .trophy').textContent = t.trophy;
   try{ localStorage.setItem('ontrack.theme', id); }catch(e){}
+  applyBg();
   document.querySelector('meta[name=theme-color]').content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
 }
 function renderThemes(){
@@ -600,17 +643,138 @@ function renderThemes(){
   THEMES.forEach(t=>{
     const x = document.createElement('button'); x.className='tt'+(t.id===theme?' sel':''); x.style.background=t.sw;
     x.innerHTML = '<span class="e">'+t.e+'</span>'+t.name;
-    x.onclick = ()=>{ applyTheme(t.id); renderThemes(); };
+    x.onclick = ()=>{ applyTheme(t.id); renderThemes(); renderBgs(); };
     b.append(x);
   });
 }
-$('themeBtn').onclick = ()=>{ renderThemes(); $('themeM').classList.add('on'); };
+$('themeBtn').onclick = ()=>{ renderThemes(); renderBgs(); $('themeM').classList.add('on'); };
 $('themeX').onclick = ()=>$('themeM').classList.remove('on');
 
 /* ---------- offline / installable ---------- */
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
+
+/* ---------- backgrounds ---------- */
+function rnd(seed){ let x = seed; return ()=> (x = (x*1664525 + 1013904223) % 4294967296) / 4294967296; }
+function stars(n, seed, y1, op){
+  const r = rnd(seed); let o = '';
+  for(let i=0;i<n;i++) o += `<circle cx="${(r()*1200).toFixed(0)}" cy="${(r()*y1).toFixed(0)}" r="${(r()*1.8+.4).toFixed(1)}" fill="#fff" opacity="${(r()*op+.25).toFixed(2)}"/>`;
+  return o;
+}
+function pines(list, fill){
+  return list.map(([x,y,h])=>`<path d="M${x} ${y-h} L${x-h*.28} ${y-h*.4} L${x-h*.16} ${y-h*.4} L${x-h*.36} ${y} L${x+h*.36} ${y} L${x+h*.16} ${y-h*.4} L${x+h*.28} ${y-h*.4}Z" fill="${fill}"/>`).join('');
+}
+const wrap = inner => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMax slice">${inner}</svg>`;
+const lg = (id,a,b,c)=>`<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/>${c?`<stop offset=".6" stop-color="${b}"/><stop offset="1" stop-color="${c}"/>`:`<stop offset="1" stop-color="${b}"/>`}</linearGradient>`;
+
+const BGS = [
+  {id:'plain', name:'Theme colour'},
+  {id:'nature', name:'🌳 Nature', svg:()=>wrap(`<defs>${lg('s','#5ec0ff','#d8f3ff')}</defs>
+    <rect width="1200" height="800" fill="url(#s)"/><circle cx="960" cy="160" r="70" fill="#fff6b0"/>
+    <g fill="#fff" opacity=".85"><ellipse cx="220" cy="150" rx="90" ry="28"/><ellipse cx="290" cy="130" rx="60" ry="28"/><ellipse cx="640" cy="230" rx="100" ry="26"/><ellipse cx="710" cy="212" rx="60" ry="26"/></g>
+    <path d="M0 520 Q200 400 400 480 T800 450 T1200 470 V800H0Z" fill="#9bd39b"/>
+    <path d="M0 600 Q250 500 500 580 T1000 560 T1200 590 V800H0Z" fill="#62b562"/>
+    ${pines([[150,640,140],[260,650,100],[980,620,150],[1090,640,110],[880,650,90]],'#2d6a30')}
+    <path d="M0 700 Q300 630 600 690 T1200 680 V800H0Z" fill="#3e8e41"/>
+    <g fill="#ffd54f"><circle cx="200" cy="740" r="6"/><circle cx="420" cy="760" r="6"/><circle cx="760" cy="745" r="6"/><circle cx="1020" cy="765" r="6"/></g>
+    <g fill="#ff7a8a"><circle cx="300" cy="765" r="6"/><circle cx="560" cy="750" r="6"/><circle cx="900" cy="760" r="6"/></g>`)},
+  {id:'beach', name:'🏖️ Beach', svg:()=>wrap(`<defs>${lg('s','#ff9a62','#ffd7a0','#bfe8ff')}${lg('w','#3ec1d3','#0f7fa8')}</defs>
+    <rect width="1200" height="480" fill="url(#s)"/><circle cx="600" cy="450" r="95" fill="#fff3c4" opacity=".95"/>
+    <rect y="470" width="1200" height="190" fill="url(#w)"/>
+    <g stroke="#fff" stroke-width="3" fill="none" opacity=".5"><path d="M60 520 q40 -14 80 0 t80 0"/><path d="M400 560 q40 -14 80 0 t80 0"/><path d="M820 510 q40 -14 80 0 t80 0"/><path d="M1000 600 q40 -14 80 0 t80 0"/><path d="M200 620 q40 -14 80 0 t80 0"/></g>
+    <path d="M0 640 Q300 600 600 630 T1200 620 V800H0Z" fill="#fff" opacity=".7"/>
+    <path d="M0 660 Q300 625 600 650 T1200 640 V800H0Z" fill="#f3d9a0"/>
+    <path d="M0 740 Q400 700 800 735 T1200 725 V800H0Z" fill="#e8c887"/>
+    <path d="M200 760 Q230 560 300 400" stroke="#7a4e2a" stroke-width="20" fill="none" stroke-linecap="round"/>
+    <g fill="#2e9e4f"><path d="M300 400 Q220 340 140 390 Q230 360 300 400Z"/><path d="M300 400 Q300 310 230 270 Q290 330 300 400Z"/><path d="M300 400 Q380 320 460 340 Q370 340 300 400Z"/><path d="M300 400 Q400 400 440 460 Q360 410 300 400Z"/><path d="M300 400 Q210 410 170 470 Q240 420 300 400Z"/></g>
+    <ellipse cx="900" cy="745" rx="40" ry="14" fill="#ff6b6b"/><path d="M860 745 Q900 690 940 745Z" fill="#ffd54f"/>`)},
+  {id:'underwater', name:'🐠 Underwater', svg:()=>wrap(`<defs>${lg('s','#4dd0e1','#0d6e9e','#01315a')}</defs>
+    <rect width="1200" height="800" fill="url(#s)"/>
+    <g fill="#fff" opacity=".07"><path d="M200 0 L320 0 L560 800 L300 800Z"/><path d="M600 0 L680 0 L980 800 L760 800Z"/><path d="M900 0 L960 0 L1200 800 L1050 800Z"/></g>
+    <g fill="none" stroke="#fff" opacity=".5" stroke-width="2"><circle cx="150" cy="500" r="14"/><circle cx="180" cy="430" r="9"/><circle cx="120" cy="360" r="6"/><circle cx="1050" cy="420" r="16"/><circle cx="1080" cy="340" r="9"/><circle cx="700" cy="300" r="7"/></g>
+    <g><ellipse cx="400" cy="300" rx="40" ry="20" fill="#ff9f43"/><path d="M360 300 L325 280 L325 320Z" fill="#ff9f43"/><circle cx="420" cy="294" r="4" fill="#fff"/>
+    <ellipse cx="850" cy="220" rx="34" ry="17" fill="#ffd43b"/><path d="M816 220 L788 204 L788 236Z" fill="#ffd43b"/><circle cx="866" cy="215" r="3.5" fill="#fff"/>
+    <ellipse cx="650" cy="520" rx="30" ry="15" fill="#ff6b9d"/><path d="M620 520 L596 506 L596 534Z" fill="#ff6b9d"/><circle cx="662" cy="516" r="3" fill="#fff"/></g>
+    <path d="M0 735 Q300 700 600 730 T1200 720 V800H0Z" fill="#e8cf8f"/>
+    <g stroke="#1f9e5a" stroke-width="14" fill="none" stroke-linecap="round"><path d="M100 760 Q60 690 100 620 T100 520"/><path d="M160 765 Q200 700 160 640"/><path d="M1000 760 Q960 690 1000 610 T1000 500"/><path d="M1070 765 Q1110 700 1070 650"/></g>
+    <g fill="#ff6b6b"><path d="M500 740 q20 -60 40 0Z"/><path d="M540 740 q15 -45 30 0Z"/></g>`)},
+  {id:'space', name:'🚀 Space', svg:()=>wrap(`<defs><radialGradient id="s" cx=".8" cy=".15" r="1"><stop offset="0" stop-color="#3b1d6e"/><stop offset="1" stop-color="#05050f"/></radialGradient>
+    <linearGradient id="p" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb072"/><stop offset="1" stop-color="#a8392a"/></linearGradient></defs>
+    <rect width="1200" height="800" fill="url(#s)"/>${stars(160,7,800,.7)}
+    <ellipse cx="900" cy="250" rx="190" ry="36" fill="none" stroke="#ffd9a8" stroke-width="10" opacity=".6" transform="rotate(-18 900 250)"/>
+    <circle cx="900" cy="250" r="105" fill="url(#p)"/>
+    <ellipse cx="900" cy="250" rx="190" ry="36" fill="none" stroke="#ffe7c4" stroke-width="10" opacity=".8" transform="rotate(-18 900 250)" stroke-dasharray="340 400" stroke-dashoffset="-290"/>
+    <circle cx="240" cy="540" r="58" fill="#cfd8e8"/><circle cx="222" cy="525" r="12" fill="#aab4c8"/><circle cx="262" cy="560" r="9" fill="#aab4c8"/>
+    <circle cx="520" cy="130" r="30" fill="#4dabf7"/><circle cx="1050" cy="640" r="42" fill="#7bed9f" opacity=".85"/>`)},
+  {id:'mountains', name:'🏔️ Mountains', svg:()=>wrap(`<defs>${lg('s','#1f3b73','#c76d86','#f6a56a')}</defs>
+    <rect width="1200" height="800" fill="url(#s)"/>${stars(50,3,300,.5)}<circle cx="780" cy="400" r="70" fill="#ffe3a8" opacity=".9"/>
+    <path d="M0 560 L180 380 L300 470 L470 300 L650 480 L800 380 L1000 520 L1200 400 V800H0Z" fill="#5d6fa3"/>
+    <path d="M470 300 L420 360 L450 350 L480 380 L510 345 L535 360Z M180 380 L145 425 L175 415 L195 435 L225 410Z" fill="#fff" opacity=".9"/>
+    <path d="M0 640 L220 470 L380 600 L560 450 L760 620 L940 500 L1200 640 V800H0Z" fill="#3b4a7d"/>
+    <path d="M0 720 Q300 650 600 710 T1200 700 V800H0Z" fill="#232c52"/>
+    ${pines([[100,760,140],[200,770,100],[1000,750,150],[1110,765,110],[900,775,90]],'#161c38')}`)},
+  {id:'aurora', name:'🌌 Aurora', svg:()=>wrap(`<defs>${lg('s','#040b1c','#0b2a3a')}<filter id="b"><feGaussianBlur stdDeviation="22"/></filter></defs>
+    <rect width="1200" height="800" fill="url(#s)"/>${stars(140,11,500,.8)}
+    <g filter="url(#b)"><path d="M-50 380 Q200 120 450 300 T950 220 T1250 320 V470 Q1000 380 750 450 T300 420 T-50 480Z" fill="#3df5a0" opacity=".55"/>
+    <path d="M100 300 Q400 60 650 230 T1200 150 V300 Q900 240 650 330 T100 380Z" fill="#a66bff" opacity=".45"/></g>
+    <path d="M0 700 Q300 660 600 700 T1200 690 V800H0Z" fill="#06101c"/>
+    ${pines([[80,740,190],[190,750,140],[300,745,100],[900,745,160],[1010,750,210],[1120,745,130]],'#06101c')}`)},
+  {id:'sunset', name:'🌇 Sunset', svg:()=>wrap(`<defs>${lg('s','#2b1055','#d53369','#ffb347')}</defs>
+    <rect width="1200" height="800" fill="url(#s)"/>${stars(40,5,250,.5)}<circle cx="600" cy="520" r="130" fill="#ffd36e" opacity=".95"/>
+    <g fill="#fff" opacity=".25"><ellipse cx="250" cy="300" rx="140" ry="22"/><ellipse cx="900" cy="250" rx="170" ry="24"/></g>
+    <path d="M0 600 Q200 540 400 590 T800 580 T1200 570 V800H0Z" fill="#4a1a54"/>
+    <path d="M0 690 Q300 630 600 690 T1200 670 V800H0Z" fill="#240c33"/>
+    ${pines([[130,720,120],[220,730,90],[1000,715,130],[1100,725,100]],'#150620')}`)}
+];
+const BG_DEFAULT = {classic:'plain', winning:'sunset', space:'space', ocean:'underwater', jungle:'nature', dino:'mountains'};
+let bgPrefs = {}, photo = null; const urlCache = {};
+try{ bgPrefs = JSON.parse(localStorage.getItem('ontrack.bg')) || {}; }catch(e){}
+try{ photo = localStorage.getItem('ontrack.photo'); }catch(e){}
+function bgCss(id){
+  if(id==='plain') return '';
+  if(id==='photo') return photo ? 'linear-gradient(rgba(0,0,0,.25),rgba(0,0,0,.25)),url("'+photo+'")' : '';
+  if(!urlCache[id]) urlCache[id] = 'url("data:image/svg+xml,'+encodeURIComponent(BGS.find(b=>b.id===id).svg())+'")';
+  return urlCache[id];
+}
+function curBg(){ const id = bgPrefs[theme] || BG_DEFAULT[theme] || 'plain'; return (id==='photo' && !photo) ? 'plain' : id; }
+function applyBg(){
+  const css = bgCss(curBg()), st = document.documentElement.style;
+  if(css) st.setProperty('--bgcustom', css); else st.removeProperty('--bgcustom');
+}
+function setBg(id){
+  bgPrefs[theme] = id;
+  try{ localStorage.setItem('ontrack.bg', JSON.stringify(bgPrefs)); }catch(e){}
+  applyBg(); renderBgs();
+}
+function renderBgs(){
+  const b = $('bgBody'); b.innerHTML=''; const cur = curBg();
+  const tile = (label, css, sel, fn)=>{
+    const x = document.createElement('button'); x.className='bt'+(sel?' sel':'');
+    x.style.backgroundImage = css || 'var(--bgimg)'; x.textContent = label; x.onclick = fn; b.append(x);
+  };
+  BGS.forEach(g=>tile(g.name, bgCss(g.id), g.id===cur, ()=>setBg(g.id)));
+  if(photo) tile('🖼️ My photo', bgCss('photo'), cur==='photo', ()=>setBg('photo'));
+  tile('📷 Choose a photo…', '', false, ()=>$('photoIn').click());
+}
+$('photoIn').onchange = e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const img = new Image(), url = URL.createObjectURL(f);
+  img.onload = ()=>{
+    const k = Math.min(1, 1600/Math.max(img.width, img.height));
+    const c = document.createElement('canvas'); c.width = Math.round(img.width*k); c.height = Math.round(img.height*k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    photo = c.toDataURL('image/jpeg', .8); URL.revokeObjectURL(url);
+    try{ localStorage.setItem('ontrack.photo', photo); }catch(x){}
+    setBg('photo');
+  };
+  img.src = url; e.target.value = '';
+};
+$('bgReset').onclick = ()=>{
+  delete bgPrefs[theme];
+  try{ localStorage.setItem('ontrack.bg', JSON.stringify(bgPrefs)); }catch(e){}
+  applyBg(); renderBgs();
+};
 
 /* ---------- boot ---------- */
 applyTheme(theme);
