@@ -164,6 +164,10 @@
     .grid button{width:56px;height:56px}
     .top1{flex-wrap:wrap}
   }
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--card2);color:var(--ink);
+    border:3px solid var(--gold);border-radius:20px;padding:12px 22px;font-size:1.3rem;font-weight:800;z-index:15;
+    opacity:0;pointer-events:none;transition:opacity .25s;text-align:center;max-width:92vw}
+  .toast.on{opacity:1}
 </style>
 </head>
 <body>
@@ -228,11 +232,14 @@
   <button class="btn ghost" id="pickX" style="margin-top:14px;width:100%">Cancel</button></div></div>
 <div class="modal" id="themeM"><div class="sheet"><h3>Pick a theme</h3><div class="tgrid" id="themeBody"></div>
   <h3 style="margin-top:18px">Pick a background</h3><div class="tgrid" id="bgBody"></div>
+  <h3 style="margin-top:18px">Clock</h3>
+  <div class="row"><button class="btn grow" id="c12">12 hour</button><button class="btn grow" id="c24">24 hour</button></div>
   <button class="btn ghost" id="bgReset" style="margin-top:10px;width:100%">↺ Use this theme's usual background</button>
   <input type="file" id="photoIn" accept="image/*" hidden>
   <button class="btn" id="themeX" style="margin-top:14px;width:100%">Done</button></div></div>
 <div class="modal" id="dlg"><div class="sheet"><h3 id="dlgMsg"></h3>
   <div class="row"><button class="btn ghost grow" id="dlgNo">No</button><button class="btn grow" id="dlgYes">Yes</button></div></div></div>
+<div class="toast" id="toast"></div>
 <div id="win">
   <div class="trophy">🏆</div>
   <h2 id="wTitle">All done!</h2>
@@ -284,7 +291,10 @@ function show(id){
 }
 
 /* ---------- helpers ---------- */
-const fmtClock = d => d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+let clock12 = true;
+try{ clock12 = localStorage.getItem('ontrack.clock') !== '24'; }catch(e){}
+const fmtClock = d => d.toLocaleTimeString('en-US', (clock12 ? {hour:'numeric', minute:'2-digit', hour12:true} : {hour:'2-digit', minute:'2-digit', hourCycle:'h23'}));
+const fmtHM = str => { const [h,m] = str.split(':').map(Number); const d = new Date(); d.setHours(h,m,0,0); return fmtClock(d); };
 function fmtDur(sec){ // sec >= 0
   sec = Math.round(sec); const m = Math.floor(sec/60), s = sec%60;
   return m+':'+String(s).padStart(2,'0');
@@ -304,7 +314,7 @@ function renderHome(){
     const d = document.createElement('div'); d.className='rtn';
     d.innerHTML = `<div class="ic">${r.icon}</div>
       <div class="grow"><div class="nm"></div>
-      <div class="sub">${r.tasks.length} tasks · ${totalMin(r)} min${r.deadline?' · by '+r.deadline:''}</div></div>`;
+      <div class="sub">${r.tasks.length} tasks · ${totalMin(r)} min${r.deadline?' · by '+fmtHM(r.deadline):''}</div></div>`;
     d.querySelector('.nm').textContent = r.name;
     const go = document.createElement('button'); go.className='btn'; go.textContent='▶ Open';
     go.onclick = ()=>openRun(r.id);
@@ -470,10 +480,29 @@ function buildTaskList(){
   });
 }
 
+let toastT = null;
+function showToast(msg){
+  const t = $('toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove('on'), 2200);
+}
+function taskToast(i){ // comment on how quick this one task was
+  const r = rById(curId), run = state.run, t = r.tasks[i], mine = run.done[i];
+  const before = Object.entries(run.done).filter(([k,v])=>+k!==i && v<mine).map(([k,v])=>v);
+  const from = before.length ? Math.max(...before) : run.start;
+  const ratio = ((mine-from)/1000) / (t.min*60);
+  if(Object.keys(run.done).length === r.tasks.length) return; // the finish screen speaks instead
+  if(ratio < .5) showToast('Wow, so fast! ⚡');
+  else if(ratio < .8) showToast('Speedy! 🏃');
+  else if(ratio <= 1.1) showToast('Right on time 👍');
+  else if(ratio <= 1.6) showToast('A little slow — keep going! 💪');
+  else showToast('That one took a while — catch up! 🐢');
+}
 function toggle(i){
   const run = state.run; if(!run) return;
-  if(run.done[i]) delete run.done[i]; else run.done[i] = Date.now();
-  save(); tick();
+  const completing = !run.done[i];
+  if(!completing) delete run.done[i]; else run.done[i] = Date.now();
+  tick(); save();
+  if(completing) taskToast(i);
   const r = rById(curId);
   if(r.tasks.every((_,k)=>run.done[k])) celebrate();
 }
@@ -507,6 +536,8 @@ function tick(){
     const live = ends[cur] - el;
     if(live < 0) slack = Math.min(slack, live);
   }
+
+  if(slack < (run.worst||0)) run.worst = slack;
 
   // task rows
   document.querySelectorAll('#tList .task').forEach(b=>{
@@ -571,13 +602,24 @@ function tick(){
 /* ---------- celebration ---------- */
 function celebrate(){
   const r = rById(curId), run = state.run;
-  const last = Math.max(...Object.keys(run.done).map(Number));
-  const slack = planEnds(r)[r.tasks.length-1] - (Math.max(...Object.values(run.done))-run.start)/1000;
-  $('wTitle').textContent = slack>=15 ? 'Brilliant! 🌟' : slack>-15 ? 'Right on time! 🌟' : 'You did it! 💪';
-  const dl = deadlineDate(r), fin = new Date(Math.max(...Object.values(run.done)));
-  let sub = `Finished in ${fmtDur((fin-run.start)/1000)} (planned ${totalMin(r)} min). `;
-  sub += slack>=15 ? `${fmtDelta(slack)} ahead!` : slack>-15 ? 'Spot on!' : `${fmtDelta(slack)} over — next time!`;
-  if(dl) sub += fin<=dl ? ' Made the deadline ✅' : ' Missed the deadline this time.';
+  const P = totalMin(r)*60, fin = Math.max(...Object.values(run.done));
+  const slack = P - (fin-run.start)/1000, dl = deadlineDate(r);
+  const worst = Math.min(0, run.worst||0), bad = worst < -Math.max(180, P*.15);
+  const margin = dl ? (dl-fin)/1000 : null, ratio = slack/P;
+  let title, note;
+  if(dl && margin < 0){ title = 'So close! 💪'; note = `You missed the deadline by ${fmtDelta(margin)}. You'll get it next time!`; }
+  else if((dl && margin <= 120 && slack < 60) || (!dl && bad && slack > -60 && slack < 60)){
+    title = 'Just in the nick of time! 😅';
+    note = bad ? 'You were way behind and clawed it all back. Amazing comeback!' : 'Only a hair to spare!';
+  }
+  else if(ratio >= .3){ title = 'Wow, so fast! ⚡'; note = `${fmtDelta(slack)} ahead of schedule. Lightning speed!`; }
+  else if(ratio >= .1){ title = 'Nice and speedy! 🚀'; note = `${fmtDelta(slack)} ahead of schedule.`; }
+  else if(ratio > -.1){ title = 'Right on schedule! 🌟'; note = 'Perfect pacing.'; }
+  else if(ratio > -.3){ title = 'A bit slow, but you did it! 💪'; note = `${fmtDelta(slack)} behind schedule. Try to be a little quicker next time.`; }
+  else { title = 'Phew, that took a while! 🐢'; note = `${fmtDelta(slack)} behind schedule. Better late than never!`; }
+  $('wTitle').textContent = title;
+  let sub = note + ` Finished in ${fmtDur((fin-run.start)/1000)} (planned ${totalMin(r)} min).`;
+  if(dl && margin >= 0) sub += ' Made the deadline ✅';
   $('wSub').textContent = sub;
   const w = $('win'); w.classList.add('on');
   const bits = THEMES.find(t=>t.id===theme).bits;
@@ -782,6 +824,19 @@ $('photoIn').onchange = e=>{
   };
   img.src = url; e.target.value = '';
 };
+function renderClockBtns(){
+  $('c12').className = 'btn grow' + (clock12 ? '' : ' ghost');
+  $('c24').className = 'btn grow' + (clock12 ? ' ghost' : '');
+}
+function setClock(v){
+  clock12 = v;
+  try{ localStorage.setItem('ontrack.clock', v ? '12' : '24'); }catch(e){}
+  renderClockBtns(); renderHome(); tick();
+  if($('run').classList.contains('on')) renderRun();
+}
+$('c12').onclick = ()=>setClock(true);
+$('c24').onclick = ()=>setClock(false);
+renderClockBtns();
 $('bgReset').onclick = ()=>{
   delete bgPrefs[theme];
   try{ localStorage.setItem('ontrack.bg', JSON.stringify(bgPrefs)); }catch(e){}
