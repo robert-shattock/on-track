@@ -114,6 +114,11 @@
   .bt{height:84px;border-radius:16px;border:4px solid transparent;color:#fff;font-weight:700;
     text-shadow:0 1px 4px #000,0 0 8px #000;background-size:cover;background-position:center bottom;padding:4px}
   .bt.sel{border-color:#fff}
+  .goal{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--card2);
+    border-radius:16px;padding:12px 16px;margin-bottom:10px;font-size:1.15rem}
+  .goal span{color:var(--mute);font-weight:700;white-space:nowrap}
+  .goal.over{background:var(--late)}
+  .goal.over span{color:#fff}
   .rtn .grow{min-width:0}
   .rtn .acts{display:flex;gap:10px}
   .icobtn{width:70px;flex:none;cursor:pointer;font-size:1.8rem;padding:6px}
@@ -208,6 +213,7 @@
       <div class="big" id="sBig">Go!</div>
       <div class="small" id="sSmall"></div>
     </div>
+    <div class="goal" id="goal"></div>
     <div class="stats">
       <div class="stat"><b id="stDone">0/0</b><span>done</span></div>
       <div class="stat"><b id="stElapsed">0:00</b><span>time used</span></div>
@@ -553,6 +559,12 @@ function tick(){
   const forecast = new Date(run.start + (totalSec - slack)*1000);
   const dl = deadlineDate(r);
   $('stFin').textContent = fmtClock(forecast) + (dl ? (forecast<=dl?' ✓':' ⚠') : '');
+  const plannedEnd = new Date(run.start + totalSec*1000);
+  const left = dl ? (dl - now)/1000 : null;
+  $('goal').innerHTML = dl
+    ? `<b>🏁 Out the door by ${fmtClock(dl)}</b><span>${left>0 ? fmtDur(left)+' left' : 'time is up!'}</span>`
+    : `<b>🏁 Finish by ${fmtClock(plannedEnd)}</b><span>${Math.max(0,Math.ceil((plannedEnd-now)/60000))} min left</span>`;
+  $('goal').classList.toggle('over', dl ? left<=0 : now>plannedEnd);
   $('barFill').style.width = (doneIdx.length/n*100)+'%';
 }
 
